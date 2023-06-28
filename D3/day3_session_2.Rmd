@@ -1,0 +1,506 @@
+---
+title: "ML Approaches"
+author: "Petro Tolochko"
+date: "2023-06-27"
+output: html_document
+---
+
+
+## Load the corpus
+
+We use a labeled Movie Review Dataset to implement a simple supervised machine learning approach. The dataset contains 5,331 positive and 5,331 negative processed sentences from Rotten Tomatoes movie reviews.
+Our goal is to train a classifier that can predict whether a sentence is positive or negative.
+
+This data was first used in Bo Pang and Lillian Lee, ``Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales.'', Proceedings of the ACL, 2005. Please find more information on the dataset here.
+https://huggingface.co/datasets/rotten_tomatoes
+
+```{r}
+library(tidyverse)
+
+#reviews <- fread("rotten_tomatoes.csv", stringsAsFactors=F)
+
+
+reviews <- read_csv("https://raw.githubusercontent.com/fabiennelind/text-as-data-in-R/main/data/rotten_tomatoes.csv")
+
+```
+
+
+
+## Inspect the data
+
+
+```{r}
+colnames(reviews)
+names(reviews)[names(reviews) == 'value'] <- 'text' #give the column with the text a useful name
+class(reviews$text)
+
+table(reviews$polarity) #check the distribution of the outcome variable
+class(reviews$polarity)
+
+```
+
+
+We now work with the R package quanteda. Please check out the following tutorials.
+https://quanteda.io/articles/quickstart.html
+https://content-analysis-with-r.com/5-machine_learning.html
+https://tutorials.quanteda.io/basic-operations/corpus/corpus/
+
+
+Create a corpus and look at a summary.
+
+```{r}
+library(quanteda)
+reviews_corpus <- corpus(reviews)
+summary(reviews_corpus, 5)
+```
+
+```{r}
+# create docvar with ID
+reviews_corpus$id_numeric <- 1:ndoc(reviews_corpus)
+summary(reviews_corpus, 5)
+```
+
+Create a vector which includes the ids for the training part (here 80%) and for the test data (here 20%).
+We randomly select the 80%. The remaining reviews are assigned as test cases.
+Once we have the DFM, we split it into training and test set. We'll go with 80% training and 20% set. Note the use of a random seed to make sure our results are replicable.
+
+
+```{r}
+set.seed(666)
+id_train <- sample(1:nrow(reviews), floor(.80 * nrow(reviews)))
+id_test <- (1:nrow(reviews))[1:nrow(reviews) %in% id_train == FALSE]
+```
+
+
+
+```{r}
+# tokenize texts and represent as dfm
+toks_reviews <- tokens(reviews_corpus, remove_punct = TRUE, remove_number = TRUE) %>% 
+               tokens_remove(pattern = stopwords("en")) %>% 
+               tokens_wordstem()
+dfm_reviews <- dfm(toks_reviews)
+dfm_reviews
+```
+
+```{r}
+dfm_reviews_trim <- dfm_trim(dfm_reviews, min_docfreq = 2, verbose=TRUE) 
+dfm_reviews_trim
+```
+
+Split the dfm in two parts, a training and a test part.
+
+
+
+```{r}
+# get training set
+dfm_train <- dfm_subset(dfm_reviews_trim, id_numeric %in% id_train)
+
+# get test set (documents not in id_train)
+dfm_test <- dfm_subset(dfm_reviews_trim, !id_numeric %in% id_train)
+
+```
+
+
+
+#Training
+
+Fit a Naïve Bayes Classifier on the training dfm and save the learned model in the object 'model.NB'.
+The Naïve Bayes Classifier is part of the library quanteda.textmodels. 
+
+```{r}
+library(quanteda.textmodels)
+model_NB <- textmodel_nb(dfm_train, dfm_train$polarity, prior = "docfreq")
+
+```
+
+
+Fit a Linear SVM classifier on the training dfm and save the learned model in the object 'model.svm'.
+
+```{r}
+library(quanteda.textmodels)
+model_svm <- textmodel_svm(dfm_train, dfm_train$polarity, prior = "docfreq")
+
+```
+
+
+#Predict for the test set
+
+```{r}
+pred_nb <- predict(model_NB, dfm_test, force = TRUE) # force = True will force your test data to give identical features (and ordering of features) to the training set
+
+```
+
+```{r}
+summary(pred_nb)
+```
+
+
+```{r}
+pred_svm <- predict(model_svm, dfm_test, force = TRUE) # force = True will force your test data to give identical features (and ordering of features) to the training set
+
+```
+
+Add the labels predicted by the model to the initial dataframe. Name the new column polarity_ml.
+
+
+```{r}
+colnames(reviews)
+
+reviews$id <- 1:nrow(reviews)
+reviews_test <- subset(reviews, id %in% id_test)
+reviews_test$polarity_ml <- pred_nb
+colnames(reviews_test)
+```
+
+
+## Compare automated with manual classifications 
+
+We compare the automated classification (in column `polarity_ml`) with the manual classifications (in column `polarity`) we use three metrics: Recall, Precision, and F1.
+The metrics inform us about the quality of the classifier. All three metrics range from 0 to 1. 
+
+
+To calculate the three metrics, we need first to create three new columns via some recoding. 
+
+The column `Positive_andRetrieved` includes a 1 if the manual coder and the classifier coded positive. = True positive
+The column `Positive_notRetrieved` includes a 1 if the manual coder coded positive but the classifier coded negative. = False negative
+The column `notPositive_butRetrieved` includes a 1 if the manual coder coded negative but the classifier coded 1. = False positive
+
+```{r}
+
+reviews_test$Positive_andRetrieved[reviews_test$polarity == "positive" & reviews_test$polarity_ml== "positive" ] <- 1
+reviews_test$Positive_notRetrieved[reviews_test$polarity == "positive" & reviews_test$polarity_ml == "negative" ] <- 1
+reviews_test$notPositive_butRetrieved[reviews_test$polarity == "negative" & reviews_test$polarity_ml == "positive" ] <- 1
+
+```
+
+### Recall 
+
+By inspecting recall we can say how many positive reviews are retrieved by the classifier.
+A recall of 1.0 means that our classifier retrieved all positive reviews. 
+A recall of 0.8 means that our classifier retrieved 80% of all positive reviews. 
+
+To obtain recall, we calculate:
+
+```{r}
+
+recall_pos <- (sum(reviews_test$Positive_andRetrieved, na.rm=TRUE))/(sum(reviews_test$Positive_notRetrieved, na.rm=TRUE) + (sum(reviews_test$Positive_andRetrieved, na.rm=TRUE)))
+recall_pos
+
+
+```
+
+
+### Precision 
+
+By inspecting precision we can say how many retrieved reviews are truely positive.
+A precision of 1,0 means that all reviews retrieved by the classifier are truely positive. 
+A precision of 0.8 means that 80% of the reviews that our classifier retrieved are truely positive reviews. 
+
+To obtain precision, we calculate:
+
+```{r}
+
+precision_pos <- (sum(reviews_test$Positive_andRetrieved, na.rm=TRUE))/(sum(reviews_test$notPositive_butRetrieved, na.rm=TRUE) + (sum(reviews_test$Positive_andRetrieved, na.rm=TRUE)))
+precision_pos # 
+
+```
+
+
+### F1
+
+F1 is the harmonic mean between recall and precision. 
+
+To obtain F1, we calculate:
+
+```{r}
+
+F1 <- (2 * precision_pos * recall_pos)/(precision_pos + recall_pos)
+F1
+
+```
+
+# Unsupervised Learning
+
+
+
+# Preparation
+
+### Required Packages
+
+We first need to install the packages required for further analysis.
+
+```{r, echo=FALSE}
+r = getOption("repos")
+r["CRAN"] = "http://cran.us.r-project.org"
+options(repos = r)
+```
+
+```{r, message=FALSE, results='hide'}
+
+# install.packages("tm")                            
+# install.packages("tidyverse")                     
+# install.packages("ggthemes")                      
+# install.packages("ggrepel")
+# install.packages("cowplot")
+# install.packages("quanteda")
+# install.packages("quanteda.textmodels")
+
+
+
+# install.packages(quanteda.textplots)
+# install.packages("gtools")
+# install.packages("sotu")
+# install.packages("stm")
+# install.packages(c("Rtsne", "rsvd", "geometry", "purrr"))
+
+
+```
+
+Note: you only need to install the packages once.
+
+We then need load the packages in our environment:
+
+```{r, message=FALSE, results='hide'}
+library(tm)
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+library(quanteda)
+library(quanteda.textmodels)
+library(gtools)
+library(sotu)
+library(stm)
+library(purrr)
+library(quanteda.textplots)
+
+```
+
+# K-Means Clustering
+## Let's first generate some data!
+
+We will use multinomial models to generate data. Generate texts about bananas and chocolate.
+
+```{r}
+set.seed(123)
+
+# Priors
+theta_1 <- rdirichlet(1, c(1, 6))
+theta_2 <- rdirichlet(1, c(6, 1))
+
+vocabulary <- c("banana", "chocolate")
+
+w <- 200 # numbers of words to generate
+n <- 100
+
+generate_text <- function(n, theta) {
+  sample(vocabulary, rbinom(1, w, .5), replace = TRUE, prob = theta) %>%
+  paste(collapse = " ")
+}
+
+
+
+text_type_1 <- replicate(n, generate_text(w, rdirichlet(1, c(2, 8))))
+text_type_2 <- replicate(n, generate_text(w, rdirichlet(1, c(8, 2))))
+
+
+
+
+all_texts <- c(text_type_1, text_type_2)
+
+dtm <- DocumentTermMatrix(all_texts) %>% as.matrix()
+dtm
+
+
+dtm %>% as_tibble() %>%
+  mutate(class = c(rep(1, n), rep(2, n))) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(class))) +
+  theme_tufte()
+
+
+# 
+# 
+# 
+# # Modesl
+# texts_1 <- rmultinom(n, 2, theta_1) %>%
+#   t() %>%
+#   as_tibble() %>%
+#   mutate(banan = V1,
+#          chocolate = V2,
+#          type = 1) %>%
+#   select(-V1, -V2)
+# 
+# texts_2 <- rmultinom(n, 2, theta_2) %>% 
+#   t() %>%
+#   as_tibble() %>%
+#     mutate(banan = V1,
+#          chocolate = V2,
+#          type = 2) %>%
+#   select(-V1, -V2)
+
+
+```
+
+
+# Now let's try clustering them!
+It's very easy. We're using `kmeans` function from base `r`.
+
+```{r}
+clustering.kmeans <- kmeans(dtm, 2)
+clustering.kmeans
+
+
+
+
+```
+
+Let's look at the cluster assignment:
+
+```{r}
+cluster <- clustering.kmeans$cluster
+centroids <- clustering.kmeans$centers
+
+cluster
+
+centroids
+
+```
+
+And assign to our data:
+
+```{r}
+dtm %>% as_tibble() %>%
+  mutate(cluster = cluster) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(cluster))) +
+  geom_point(aes(banana, chocolate), data = as_tibble(centroids),
+             size = 6, shape = 10) +
+  theme_tufte()
+```
+
+
+
+
+
+Ok, let's add some more data!
+
+```{r}
+
+text_type_1 <- replicate(n, generate_text(w, rdirichlet(1, c(2, 8))))
+text_type_2 <- replicate(n, generate_text(w, rdirichlet(1, c(8, 2))))
+text_type_3 <- replicate(500, generate_text(w + 100, rdirichlet(1, c(2, 2))))
+
+
+
+
+all_texts <- c(text_type_1, text_type_2, text_type_3)
+dtm <- DocumentTermMatrix(all_texts) %>% as.matrix()
+
+dtm %>% as_tibble() %>%
+  mutate(class = c(rep(1, n), rep(2, n), rep(3, 500))) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(class))) +
+  theme_tufte()
+
+
+```
+
+A bit more interesting!
+
+```{r}
+clustering.kmeans <- kmeans(dtm, 3)
+clustering.kmeans
+
+cluster <- clustering.kmeans$cluster
+centroids <- clustering.kmeans$centers
+
+
+```
+
+```{r}
+dtm %>% as_tibble() %>%
+  mutate(cluster = cluster) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(cluster))) +
+  geom_point(aes(banana, chocolate), data = as_tibble(centroids),
+             size = 6, shape = 10) +
+  theme_tufte()
+```
+
+# Task: try different number of clusters and complare the clustering solution
+
+```{r}
+
+set.seed(123)
+
+# function to compute total within-cluster sum of square 
+wss <- function(k) {
+  kmeans(dtm, k, nstart = 10)$tot.withinss
+}
+
+# Compute and plot wss for k = 1 to k = 3
+k.values <- 1:15
+
+# extract wss for 2-15 clusters
+wss_values <- map_dbl(k.values, wss)
+
+plot(k.values, wss_values,
+       type="b", pch = 19, frame = FALSE, 
+       xlab="Number of clusters K",
+       ylab="Total within-clusters sum of squares")
+
+
+
+
+```
+
+
+# Text scaling
+
+From [https://burtmonroe.github.io/TextAsDataCourse/Tutorials/IntroductionToWordfish.nb.html](https://burtmonroe.github.io/TextAsDataCourse/Tutorials/IntroductionToWordfish.nb.html)
+
+
+```{r}
+# Irish budget speeches from 2010
+
+
+toks_irish <- tokens(data_corpus_irishbudget2010, remove_punct = TRUE)
+dfmat_irish <- dfm(toks_irish)
+tmod_wf <- textmodel_wordfish(dfmat_irish, dir = c(6, 5))
+summary(tmod_wf)
+
+
+
+textplot_scale1d(tmod_wf)
+
+textplot_scale1d(tmod_wf, groups = dfmat_irish$party)
+
+
+textplot_scale1d(tmod_wf, margin = "features", 
+                 highlighted = c("government", "global", "children", 
+                                 "bank", "economy", "the", "citizenship",
+                                 "productivity", "deficit"))
+
+```
+
+Topic models can also do unidimensional scaling!
+
+```{r}
+dfmat_irish_stm <- quanteda::convert(dfmat_irish, to = "stm")
+names(dfmat_irish_stm)
+
+irish_stmfit <- stm(documents = dfmat_irish_stm$documents, 
+                     vocab = dfmat_irish_stm$vocab,
+                     K = 2,
+                     max.em.its = 75,
+                     data = dfmat_irish_stm$meta,
+                     init.type = "Spectral"
+)
+
+
+compare.df <- cbind(name=rownames(docvars(dfmat_irish)),wordfish = tmod_wf$theta, stm = irish_stmfit$theta[,2])
+compare.df
+
+
+```
+
