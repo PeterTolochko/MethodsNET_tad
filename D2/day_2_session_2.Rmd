@@ -30,6 +30,8 @@ options(repos = r)
 # install.packages("ggthemes") # for nicer graphics # new
 # install.packages("ggrepel")
 # install.packages("cowplot")
+# install.packages("openNLP")
+# install.packages("SnowballC")
 ```
 
 Note: you only need to install the packages once.
@@ -49,7 +51,7 @@ Check if your working directory is the correct one:
 
 ```{r}
 getwd()
-setwd("~/Desktop/MethodsNET_tad") # this is an example, paste your path here
+setwd("~/Desktop/MethodsNET_tad/D2") # this is an example, paste your path here
 ```
 
 
@@ -60,7 +62,13 @@ federalist <- read_csv("federalist.csv")
 
 federalist
 
+head(federalist$author, 10)
+
 names(federalist)
+nrow(federalist)
+ncol(federalist)
+
+
 ```
 
 Let's see how a text looks like:
@@ -79,7 +87,7 @@ Amazing, let's continue.
 clean_federalist <- federalist %>%
   mutate(                           # the mutate() function is part of dplyr package / allows to change stuff within the dataframe easily
     text   = str_to_lower(text),                # turn all letters to lowercase
-    text   = str_replace_all(text, "\n", " "),  # replace '/n' carriage return symbols
+    text   = str_replace_all(text, "\n", " "),  # replace '\n' carriage return symbols
     text   = str_remove_all(text, "[:punct:]"), # remove all punctuation
     man    = str_count(text, "\\Wman "),        # Basic regex (more about it later in the course. '\\W' part means at the begging of the word) and count those up
     by     = str_count(text, "\\Wby "),         # same
@@ -547,6 +555,7 @@ madison_ids <- which(clean_federalist$author == "MADISON")
 
 most_frequent_hamilton <- dtm_federalist_tfidf[hamilton_ids, ] %>%
   as.matrix() %>% colSums()
+
 most_frequent_madison <- dtm_federalist_tfidf[madison_ids, ] %>%
   as.matrix() %>% colSums()
 

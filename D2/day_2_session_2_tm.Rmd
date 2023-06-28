@@ -261,7 +261,20 @@ plot(sotu_topic_60_effects, covariate = "party", topics = c(3), model = sotu_top
 
 ```
 
+# Content difference
 
+```{r, print=FALSE}
+sotu_topic_5 <- stm(documents = sotu_data_prepd$documents,
+                    vocab = sotu_data_prepd$vocab,
+                    K = 5,
+                    prevalence = ~party,
+                     content =~ party,
+                     max.em.its = 75,
+                     data = sotu_data_prepd$meta,
+                     init.type = "Spectral",
+                     verbose=FALSE
+)
+```
 
 # Text scaling
 
