@@ -212,6 +212,8 @@ load("many_models.RData")
 
 ```{r}
 sapply(many_models$exclusivity, mean)
+sapply(many_models$exclusivity, sd)
+
 sapply(many_models$semcoh, mean)
 
 ```
@@ -221,11 +223,11 @@ Ok, let's choose the K=60 model.
 sotu_topic_60 <- stm(documents = sotu_data_prepd$documents,
                     vocab = sotu_data_prepd$vocab,
                     K = 60,
-                     prevalence =~ party + s(year),
+                     prevalence =~ party,
                      max.em.its = 75,
                      data = sotu_data_prepd$meta,
                      init.type = "Spectral",
-                     verbose=FALSE
+                     verbose=TRUE
 )
 ```
 
@@ -238,7 +240,7 @@ plot(sotu_topic_60)
 
 
 ```{r}
-cloud(sotu_topic_60, topic=13, scale=c(2,.25))
+cloud(sotu_topic_60, topic=3, scale=c(2,.25))
 
 ```
 
@@ -246,12 +248,12 @@ cloud(sotu_topic_60, topic=13, scale=c(2,.25))
 ```{r}
 
 
-sotu_topic_60_effects <- estimateEffect(1:20 ~ party + s(year), sotu_topic_60, meta = sotu_data_prepd$meta, uncertainty = "Global")
+sotu_topic_60_effects <- estimateEffect(1:20 ~ party, sotu_topic_60, meta = sotu_data_prepd$meta, uncertainty = "Global")
 summary(sotu_topic_60_effects, topics=3)
 
 
 
-plot(sotu_topic_60_effects, covariate = "party", topics = c(3), model = sotu_topic_60, method = "pointestimate",
+plot(sotu_topic_60_effects, covariate = "party", topics = c(1, 2, 3), model = sotu_topic_60, method = "pointestimate",
      main = "Effect of Party on Topic Proportion", labeltype = "custom",
      custom.labels = c("Republican", "Democratic")
      )
@@ -272,8 +274,11 @@ sotu_topic_5 <- stm(documents = sotu_data_prepd$documents,
                      max.em.its = 75,
                      data = sotu_data_prepd$meta,
                      init.type = "Spectral",
-                     verbose=FALSE
+                     verbose=TRUE
 )
+
+
+
 ```
 
 # Text scaling

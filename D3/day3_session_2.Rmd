@@ -49,6 +49,7 @@ https://tutorials.quanteda.io/basic-operations/corpus/corpus/
 Create a corpus and look at a summary.
 
 ```{r}
+# install.packages("quanteda")
 library(quanteda)
 reviews_corpus <- corpus(reviews)
 summary(reviews_corpus, 5)
@@ -156,7 +157,7 @@ colnames(reviews_test)
 ## Compare automated with manual classifications 
 
 We compare the automated classification (in column `polarity_ml`) with the manual classifications (in column `polarity`) we use three metrics: Recall, Precision, and F1.
-The metrics inform us about the quality of the classifier. All three metrics range from 0 to 1. 
+The metrics inform us about the quality of the classifier. All three metrics range from 0 to 1.
 
 
 To calculate the three metrics, we need first to create three new columns via some recoding. 
@@ -284,8 +285,8 @@ We will use multinomial models to generate data. Generate texts about bananas an
 set.seed(123)
 
 # Priors
-theta_1 <- rdirichlet(1, c(1, 6))
-theta_2 <- rdirichlet(1, c(6, 1))
+theta_1 <- rdirichlet(1, c(1, 6)) # john
+theta_2 <- rdirichlet(1, c(6, 1)) # mary
 
 vocabulary <- c("banana", "chocolate")
 
@@ -299,20 +300,25 @@ generate_text <- function(n, theta) {
 
 
 
-text_type_1 <- replicate(n, generate_text(w, rdirichlet(1, c(2, 8))))
-text_type_2 <- replicate(n, generate_text(w, rdirichlet(1, c(8, 2))))
+text_type_1 <- replicate(n,
+                         generate_text(w, rdirichlet(1, c(2, 8))))
+
+text_type_2 <- replicate(n,
+                         generate_text(w, rdirichlet(1, c(8, 2))))
 
 
 
 
 all_texts <- c(text_type_1, text_type_2)
 
+
 dtm <- DocumentTermMatrix(all_texts) %>% as.matrix()
 dtm
 
 
 dtm %>% as_tibble() %>%
-  mutate(class = c(rep(1, n), rep(2, n))) %>%
+  mutate(class = c(rep(1, n),
+                   rep(2, n))) %>%
   ggplot() +
   geom_point(aes(banana, chocolate, color = factor(class))) +
   theme_tufte()
@@ -418,6 +424,7 @@ centroids <- clustering.kmeans$centers
 ```
 
 ```{r}
+
 dtm %>% as_tibble() %>%
   mutate(cluster = cluster) %>%
   ggplot() +
